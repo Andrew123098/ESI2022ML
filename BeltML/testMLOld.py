@@ -28,6 +28,9 @@ for filename in glob.glob(os.path.join(database_path, '*.wav')):
     X1.append(wavfile.read(filename)[1])
     count1 = count1 + 1
 
+# Create Output data that is the same length as the input data.
+Y1 = np.ones([X1.__len__()],dtype='float32').tolist()
+
 # Load in Left side .WAV Data.
 X2 = [] 
 count2 = 0
@@ -36,43 +39,14 @@ for filename2 in glob.glob(os.path.join(database_path2, '*.wav')):
     X2.append(wavfile.read(filename2)[1])
     count2 = count2 + 1    
 
-# Get the smallest size audio file (this will be sample size input to model)
-sample_size = len(X1[0])
-for data in X1:
-    if len(data) < sample_size:
-        sample_size = len(data)
-
-# Make audio data into equal size chunks
-X1e = []
-for i in X1:
-    num_chunks = len(i)//sample_size
-    for j in range(num_chunks):
-        X1e.append(i[(j+1)*sample_size-sample_size:(j+1)*sample_size])
-X1 = X1e
-        
-X2e = []
-for i in X2:
-    num_chunks = len(i)//sample_size
-    for j in range(num_chunks):
-        X2e.append(i[(j+1)*sample_size-sample_size:(j+1)*sample_size])        
-X2=X2e  
-
-del X1e
-del X2e   
-
 # Create Output data that is the same length as the input data.
-Y1 = np.ones([X1.__len__()],dtype='float32').tolist()
 Y2 = np.zeros([X2.__len__()],dtype='float32').tolist()
 
-
 # Concatenate Left and Right .WAV data and output data as numpy arrays.
-X1.extend(X2)
-X = np.asarray(X1)
-Y = np.asarray(Y1+Y2).astype(np.int16)
+X = np.asarray(X1+X2)
+Y = np.asarray(Y1+Y2).astype(np.float32)
 
-X=list(X)
-Y=list(Y)
-
+X = X.tolist()
 
 # Split data into test training data.
 X_train,X_test,Y_train,Y_test=train_test_split(X,Y,test_size=0.2,random_state=0,shuffle=True)
@@ -90,24 +64,44 @@ plt.show()
 
 # Create the Model
 model = Sequential()
+'''
+### FIRST LAYER
+model.add(Dense(100))
+model.add(Activation('relu'))
+model.add(Dropout(0.5))
 
-# Add a LSTM layer with 1 output, and ambiguous input data length.
-model.add(layers.LSTM(1,batch_input_shape=(len(X_train),None,1),return_sequences=True))
-model.add(layers.LSTM(1,return_sequences=False))
+### SECOND LAYER
+model.add(Dense(200))
+model.add(Activation('relu'))
+model.add(Dropout(0.5))
+
+### THIRD LAYER
+model.add(Dense(100))
+model.add(Activation('relu'))
+model.add(Dropout(0.5))
+
+### FINAL LAYER
+model.add(Dense(50))
+model.add(Activation('softmax'))
+'''
+# Add an Embedding layer expecting input vocab of size 1000, and
+# output embedding dimension of size 64.
+model.add(layers.LSTM((1),batch_input_shape=(len(X_train),None,1),return_sequences=True))
+model.add(layers.LSTM((1),return_sequences=False))
+# Add a LSTM layer with 128 internal units.
+#model.add(layers.LSTM(128))
+
+# Add a Dense layer with 10 units.
+#model.add(layers.Dense(10))
 
 # Compile Model
-#history = model.compile(loss='mean_absolute_error', metrics=['accuracy'],optimizer='adam',output='sparse_categorical_crossentropy')
-optimizer = Adam(learning_rate=2*1e-4)
-history = model.compile(optimizer=optimizer, loss={
-                  'output': 'sparse_categorical_crossentropy', },
-              metrics={
-                  'output': 'sparse_categorical_accuracy', },
-              sample_weight_mode='temporal')
+history = model.compile(loss='mean_absolute_error', metrics=['accuracy'],optimizer='adam')
+
 model.summary()
 
 # Define Training Parameters
 num_epochs = 200
-num_batch_size = 1
+num_batch_size = 32
 
 # Save the most accurate model to file. (Verbosity Gives more information)
 checkpointer = ModelCheckpoint(filepath="SavedModels/checkpointModel.hdf5", verbose=1,save_best_only=True)
@@ -121,3 +115,4 @@ model.fit(X_train,Y_train,batch_size=num_batch_size, epochs=num_epochs, validati
 # Get and Print Model Validation Accuracy
 test_accuracy=model.evaluate(X_test,Y_test,verbose=0)
 print(test_accuracy[1])
+
