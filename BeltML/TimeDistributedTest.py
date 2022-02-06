@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Jan 18 15:51:56 2022
+Created on Sun Feb  6 11:29:52 2022
 
 @author: andre
 """
-
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras import layers
+from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.layers import Conv2D, TimeDistributed,Dropout,Input, Dense,\
+    BatchNormalization, GRU, Layer, Flatten
+from tensorflow.keras.regularizers import l2
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint
 from sklearn.model_selection import train_test_split
@@ -87,26 +88,56 @@ plt.ylabel("Amplitude")
 plt.show()
 '''
 
-# Create the Model
-model = Sequential()
+def nn(shape_1,shape_2):
+    input = Input(shape=[shape_1,shape_2,2,1])
 
-# Add a LSTM layer with 1 output, and ambiguous input data length.
-model.add(layers.LSTM(1,batch_input_shape=(1,sample_size,2),return_sequences=True))
-model.add(layers.LSTM(1,return_sequences=False))
+    conv1 = TimeDistributed(Conv2D(filters=32, kernel_size=[32,1], activation='relu',strides =(3,1)))(input)
+    batch1 = TimeDistributed(BatchNormalization())(conv1)
+
+    conv2 = TimeDistributed(Conv2D(filters=32, kernel_size=[32,1], activation='relu',strides =(2,1)))(batch1)
+    batch2 = TimeDistributed(BatchNormalization())(conv2)
+
+    conv3 = TimeDistributed(Conv2D(filters=32, kernel_size=[32,1], activation='relu',strides =(2,1)))(batch2)
+    batch3 = TimeDistributed(BatchNormalization())(conv3)
+
+    conv4 = TimeDistributed(Conv2D(filters=32, kernel_size=[32,1], activation='relu',strides =(2,1)))(batch3)
+    batch4 = TimeDistributed(BatchNormalization())(conv4)
+
+    flat = TimeDistributed(Flatten())(batch4)
+
+
+    gru1 = GRU(256, activation='relu',return_sequences=True, kernel_regularizer=l2(0.01))(flat)
+    drop1 = Dropout(rate=0.4)(gru1)
+    batch1 = BatchNormalization()(drop1)
+
+    gru2 = GRU(128, activation='relu',return_sequences=True, kernel_regularizer=l2(0.01))(batch1)
+    drop2 = Dropout(rate=0.4)(gru2)
+    batch2 = BatchNormalization()(drop2)
+
+
+    dense = TimeDistributed(Dense(2, activation='softmax'),name = 'output')(batch2)
+
+
+    return [input], [dense]
+
+# Define Training Parameters
+EPOCH_LENGTH = 30
+SAMPLE_RATE = 44100
+NUM_BATCH_SIZE = 1
+
+input, output = nn(1,sample_size)
+model = Model(inputs=input,outputs=output)
+
+optimizer = Adam(learning_rate=2*1e-4)
 
 # Compile Model
-#history = model.compile(loss='mean_absolute_error', metrics=['accuracy'],optimizer='adam',output='sparse_categorical_crossentropy')
-optimizer = Adam(learning_rate=2*1e-4)
-history = model.compile(optimizer=optimizer, loss={
+model.compile(optimizer=optimizer, loss={
                   'output': 'sparse_categorical_crossentropy', },
               metrics={
                   'output': 'sparse_categorical_accuracy', },
               sample_weight_mode='temporal')
 model.summary()
 
-# Define Training Parameters
-num_epochs = 200
-num_batch_size = 1
 
 # Save the most accurate model to file. (Verbosity Gives more information)
 checkpointer = ModelCheckpoint(filepath="SavedModels/checkpointModel.hdf5", verbose=1,save_best_only=True)
@@ -115,7 +146,7 @@ checkpointer = ModelCheckpoint(filepath="SavedModels/checkpointModel.hdf5", verb
 start = datetime.now()
 
 # Train the model
-model.fit(X_train,Y_train,batch_size=num_batch_size, epochs=num_epochs, validation_data=(X_test,Y_test), callbacks=[checkpointer],verbose=1)
+model.fit(X_train,Y_train,batch_size=NUM_BATCH_SIZE, epochs=EPOCH_LENGTH, validation_data=(X_test,Y_test), callbacks=[checkpointer],verbose=1)
 
 # Get and Print Model Validation Accuracy
 test_accuracy=model.evaluate(X_test,Y_test,verbose=0)
