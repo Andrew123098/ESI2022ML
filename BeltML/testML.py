@@ -70,11 +70,13 @@ X1.extend(X2)
 X = np.asarray(X1)
 Y = np.asarray(Y1+Y2).astype(np.int16)
 
-#X=list(X)
-#Y=list(Y)
+Xnew=X[0:4900][:][:]
+Ynew=Y[0:4900][:][:]
 
 # Split data into test training data.
-X_train,X_test,Y_train,Y_test=train_test_split(X,Y,test_size=0.2,random_state=0,shuffle=True)
+X_train,X_test,Y_train,Y_test=train_test_split(Xnew,Ynew,test_size=0.204,random_state=0,shuffle=True)
+
+
 
 '''  
 print(X[1])    
@@ -91,22 +93,23 @@ plt.show()
 model = Sequential()
 
 # Add a LSTM layer with 1 output, and ambiguous input data length.
-model.add(layers.LSTM(1,batch_input_shape=(1,sample_size,2),return_sequences=True))
-model.add(layers.LSTM(1,return_sequences=False))
+model.add(layers.LSTM(2,input_shape=(sample_size,2),return_sequences=True))
+model.add(layers.LSTM(2,return_sequences=False))
 
 # Compile Model
 #history = model.compile(loss='mean_absolute_error', metrics=['accuracy'],optimizer='adam',output='sparse_categorical_crossentropy')
 optimizer = Adam(learning_rate=2*1e-4)
-history = model.compile(optimizer=optimizer, loss={
-                  'output': 'sparse_categorical_crossentropy', },
-              metrics={
-                  'output': 'sparse_categorical_accuracy', },
-              sample_weight_mode='temporal')
+
+history = model.compile(
+    loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    optimizer="adam",
+    metrics=["accuracy"],
+)
 model.summary()
 
 # Define Training Parameters
-num_epochs = 200
-num_batch_size = 1
+num_epochs = 5
+num_batch_size = 100
 
 # Save the most accurate model to file. (Verbosity Gives more information)
 checkpointer = ModelCheckpoint(filepath="SavedModels/checkpointModel.hdf5", verbose=1,save_best_only=True)
